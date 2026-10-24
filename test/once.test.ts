@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { NotApplied, ReplyOnceError, createReplyOnce, unwrap } from '../src/index.js';
 import type { ReplyOnceEvent } from '../src/index.js';
-import { counter, eachStore, fakeClock, sleep, uid } from './helpers.js';
+import { counter, eachStore, fakeClock, sleep, uid, until } from './helpers.js';
 
 eachStore('once', (makeStore) => {
   it('runs an effect once and replays its result afterwards', async () => {
@@ -140,11 +140,13 @@ eachStore('once', (makeStore) => {
     const key = { scope: uid(), intent: 'reply', payload: 1 };
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
+    let started = false;
     const first = ro.once(key, async () => {
+      started = true;
       await gate;
       return 'done';
     });
-    await sleep(20);
+    await until(() => started);
     expect((await ro.once(key, () => 'dup')).status).toBe('in_flight');
     const waiting = ro.once(key, () => 'dup', { wait: { timeoutMs: 2_000, intervalMs: 5 } });
     await sleep(20);
@@ -158,8 +160,12 @@ eachStore('once', (makeStore) => {
     const store = await makeStore();
     const ro = createReplyOnce({ store, clock: clock.now, pendingTtlMs: 1_000 });
     const key = { scope: uid(), intent: 'reply', payload: 1 };
-    void ro.once(key, () => new Promise(() => {})); // the worker "crashes" mid-effect
-    await sleep(30);
+    let started = false;
+    void ro.once(key, () => {
+      started = true;
+      return new Promise(() => {}); // the worker "crashes" mid-effect
+    });
+    await until(() => started);
     expect((await ro.once(key, () => 1)).status).toBe('in_flight');
     clock.advance(1_000);
     expect((await ro.check(key)).status).toBe('ambiguous');
@@ -186,11 +192,13 @@ eachStore('once', (makeStore) => {
     const key = { scope: uid(), intent: 'reply', payload: 1 };
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
+    let started = false;
     const slow = ro.once(key, async () => {
+      started = true;
       await gate;
       return 'landed';
     });
-    await sleep(20);
+    await until(() => started);
     clock.advance(2_000);
     await ro.resolve(key, { outcome: 'not_applied' });
     release();

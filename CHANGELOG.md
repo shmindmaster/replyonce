@@ -5,6 +5,14 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+- Fixed (TypeScript and Python): a customer message could be left unanswered when two runs
+  had the same `contextAt` millisecond, for example two messages of a burst. The tie was
+  broken by which run began first, so the run for the later message could be superseded by
+  the run for the earlier one, which never saw it. Runs whose contexts share a timestamp are
+  now peers that may both write, and the conversation fence keeps them from answering the
+  same message twice. Runs begun without `contextAt` are still ordered by when they began.
+  Found by the Postgres chaos demo in CI.
+
 ## 0.1.1 - 2026-10-24
 
 Python package only. The npm package's first published version, 0.1.0, already includes this

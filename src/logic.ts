@@ -64,12 +64,17 @@ function isLive(r: RunRecord, now: number): boolean {
 }
 
 /**
- * Is `a` newer than `b`? Exclusive leases order by token; otherwise by context recency, then
- * by when the run first began. Never by token there: a redelivery bumps an old run's token.
+ * Is `a` newer than `b`? Exclusive leases order by token; otherwise by context recency. Never
+ * by token there: a redelivery bumps an old run's token. Equal context times order by when
+ * the run first began only if neither run gave a `contextAt`, because then each read its
+ * context as it began. Otherwise neither is newer: begin order says nothing about whose
+ * context is fresher, and fencing out the wrong one would leave its message unanswered.
+ * Both may then write; conflict checks keep them from answering the same thing twice.
  */
 function isNewer(a: RunRecord, b: RunRecord): boolean {
   if (a.mode === 'exclusive' && b.mode === 'exclusive') return a.token > b.token;
   if (a.orderAt !== b.orderAt) return a.orderAt > b.orderAt;
+  if (a.baseContextAt !== null || b.baseContextAt !== null) return false;
   return a.baseSeq > b.baseSeq;
 }
 

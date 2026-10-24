@@ -73,6 +73,16 @@ def uid(prefix: str = "conv") -> str:
     return f"{prefix}-{uuid.uuid4()}"
 
 
+async def until(cond, timeout: float = 5.0) -> None:
+    """Wait until ``cond()`` holds. A fixed sleep is not enough for a store round trip on a slow runner."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while not cond():
+        if loop.time() > deadline:
+            raise AssertionError("until: condition not met in time")
+        await asyncio.sleep(0.002)
+
+
 class FakeClock:
     def __init__(self, start: int = 1_800_000_000_000) -> None:
         self.t = start

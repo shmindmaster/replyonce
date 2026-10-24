@@ -109,12 +109,9 @@ eachStore('races', (makeStore, storeName) => {
 
   it('concurrent runs on one conversation never answer a customer message twice', async () => {
     const store = await makeStore();
-    // Runs are ordered by contextAt, and Date.now() can return the same millisecond for two
-    // snapshots (Windows timers tick at about 15.6 ms). One strictly increasing clock for the
-    // library and the snapshots keeps "the newest message's run is newest" true on every OS.
-    let last = 0;
-    const clock = () => (last = Math.max(Date.now(), last + 1));
-    const ro = createReplyOnce({ store, clock });
+    // Snapshots often share a millisecond (Windows timers tick at about 15.6 ms). Such runs are
+    // peers rather than ordered by begin, so the newest message's run is never fenced out.
+    const ro = createReplyOnce({ store });
     const conv = uid();
     const inbound: string[] = [];
     const sent: string[][] = [];
@@ -135,7 +132,7 @@ eachStore('races', (makeStore, storeName) => {
         if (res.ok) break;
         if (res.status === 'refused' && res.reason !== 'conversation_changed') break;
         await jitter(5);
-        view = { inbound: [...inbound], answered: answered(), at: clock() };
+        view = { inbound: [...inbound], answered: answered(), at: Date.now() };
       }
       await run.end();
     };
@@ -143,7 +140,7 @@ eachStore('races', (makeStore, storeName) => {
     const runs: Promise<void>[] = [];
     for (let m = 1; m <= 12; m++) {
       inbound.push(`m${m}`);
-      const snapshot = { inbound: [...inbound], answered: answered(), at: clock() };
+      const snapshot = { inbound: [...inbound], answered: answered(), at: Date.now() };
       runs.push(runFor(snapshot, `run-${m}`));
       if (m % 4 === 0) runs.push(runFor(snapshot, `run-${m}`)); // duplicate delivery
       await jitter(6);

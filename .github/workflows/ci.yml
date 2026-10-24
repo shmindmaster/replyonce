@@ -12,11 +12,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Redis is addressed by IPv4: Memurai on Windows does not listen on ::1, and a refused
+# connection there costs about 2 s before the client falls back from localhost's ::1.
 env:
   REPLYONCE_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
-  REPLYONCE_REDIS_URL: redis://localhost:6379
+  REPLYONCE_REDIS_URL: redis://127.0.0.1:6379
   DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
-  REDIS_URL: redis://localhost:6379
+  REDIS_URL: redis://127.0.0.1:6379
 
 jobs:
   test:
@@ -38,6 +40,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
+      - name: Chaos demo stress loop (every seed, every store, several passes)
+        if: matrix.node == 24
+        run: npx vitest run test/demo.test.ts
+        env:
+          REPLYONCE_DEMO_REPEAT: 4
       - run: npm run smoke
       - name: Chaos demo (fails on any duplicate)
         run: node dist/cli.js demo --conversations 300

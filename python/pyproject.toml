@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "replyonce"
-version = "0.1.0"
+version = "0.1.1"
 description = "Stop your agent from replying, refunding or ticketing twice. Idempotency keys, per-conversation write fencing and an effect ledger for tool-calling agents, webhooks and workers."
 readme = "README.md"
 license = "Apache-2.0"

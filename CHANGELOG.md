@@ -5,6 +5,11 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+## 0.1.1 - 2026-10-24
+
+Python package only. The npm package's first published version, 0.1.0, already includes this
+fix.
+
 - Fixed: `PostgresStore.migrate()` (TypeScript and Python) is safe when several workers call
   it at once. Concurrent `CREATE TABLE IF NOT EXISTS` could fail with a unique-violation on
   `pg_type`; migrations of the same table are now serialized with an advisory lock. Found by

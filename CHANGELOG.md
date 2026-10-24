@@ -5,6 +5,11 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+## 0.1.2 - 2026-10-24
+
+Python package only. The npm package's first published version, 0.1.0, already includes this
+fix.
+
 - Fixed (TypeScript and Python): a customer message could be left unanswered when two runs
   had the same `contextAt` millisecond, for example two messages of a burst. The tie was
   broken by which run began first, so the run for the later message could be superseded by

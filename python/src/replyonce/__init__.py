@@ -16,7 +16,7 @@ from ._core import (
 from ._key import MISSING, canonical_json, effect_key, hash_payload, provider_idempotency_key
 from .stores.memory import MemoryStore
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 __all__ = [
     "CheckResult",

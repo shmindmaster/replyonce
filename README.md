@@ -292,6 +292,24 @@ three stores, in CI.
   effects are reconciled the next time the key is claimed, or by `resolve()`.
 - `MemoryStore` is per process: for tests, demos and single-instance services.
 
+## Python
+
+```sh
+pip install replyonce        # or "replyonce[postgres]" / "replyonce[redis]"
+replyonce demo
+```
+
+```python
+from replyonce import Key, MemoryStore, ReplyOnce
+
+ro = ReplyOnce(MemoryStore())
+result = await ro.once(Key("order-A-1001", "refund", {"order": "A-1001", "cents": 2500}), issue_refund)
+```
+
+The API mirrors the TypeScript one in snake_case (`ro.begin(scope, run_id=..., context_at=...)`,
+`run.once(intent, payload, effect)`). Keys hash identically, and the Postgres table and
+Redis layout are the same. See [python/README.md](python/README.md).
+
 ## Prior art
 
 Idempotency keys as payment APIs use them, fencing tokens for distributed locks, the

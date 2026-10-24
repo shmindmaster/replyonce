@@ -99,7 +99,7 @@ jobs:
         working-directory: python
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync
@@ -140,7 +140,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: '3.13'
       - run: npm ci

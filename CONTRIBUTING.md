@@ -28,6 +28,19 @@ REPLYONCE_REDIS_URL=redis://localhost:56379 npm test
 
 Without those variables, only the memory store is tested. CI always runs all three.
 
+### Python
+
+```sh
+cd python
+uv sync
+uv run pytest -q          # same REPLYONCE_PG_URL / REPLYONCE_REDIS_URL variables
+uv run replyonce demo
+```
+
+`python/src/replyonce/_logic.py` is a line-for-line port of `src/logic.ts`. A change to one
+needs the same change, and a test, in the other. `scripts/interop.ts` and
+`python/scripts/interop.py` check that the two share a store correctly.
+
 ## Ground rules
 
 - **The state machine stays pure.** All decisions live in `src/logic.ts` as functions from

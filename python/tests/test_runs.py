@@ -3,7 +3,7 @@ import time
 
 from replyonce import ReplyOnce
 
-from .conftest import FakeClock, uid
+from .conftest import FakeClock, uid, until
 
 
 def test_newest_run_owns_the_conversation(with_store):
@@ -40,12 +40,15 @@ def test_duplicate_reply_race_is_closed(with_store):
         gate = asyncio.Event()
         a = await ro.begin(conv)
 
+        started = asyncio.Event()
+
         async def a_send(ctx):
+            started.set()
             await gate.wait()
             sent.append("A: m1")
 
         a_task = asyncio.ensure_future(a.once("reply", {"answers": ["m1"]}, a_send, summary="answer to m1"))
-        await asyncio.sleep(0.02)
+        await until(started.is_set)
         b = await ro.begin(conv)
         r1 = await b.once("reply", {"answers": ["m1", "m2"]}, lambda ctx: sent.append("B: m1+m2"))
         assert (r1.reason, r1.conflicts[0]["status"], r1.conflicts[0]["summary"]) == ("conversation_changed", "pending", "answer to m1")

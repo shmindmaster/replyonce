@@ -4,7 +4,7 @@ import pytest
 
 from replyonce import Key, NotApplied, ReplyOnce, ReplyOnceError, unwrap
 
-from .conftest import FakeClock, uid
+from .conftest import FakeClock, uid, until
 
 
 def test_executes_once_and_replays(with_store):
@@ -100,13 +100,15 @@ def test_in_flight_and_wait(with_store):
         ro = ReplyOnce(store)
         key = Key(uid(), "reply", 1)
         gate = asyncio.Event()
+        started = asyncio.Event()
 
         async def slow(ctx):
+            started.set()
             await gate.wait()
             return "done"
 
         first = asyncio.ensure_future(ro.once(key, slow))
-        await asyncio.sleep(0.02)
+        await until(started.is_set)
         assert (await ro.once(key, lambda ctx: "dup")).status == "in_flight"
         waiting = asyncio.ensure_future(ro.once(key, lambda ctx: "dup", wait_ms=2000, wait_interval_ms=5))
         await asyncio.sleep(0.02)
@@ -123,8 +125,14 @@ def test_abandoned_claim_becomes_ambiguous(with_store):
         clock = FakeClock()
         ro = ReplyOnce(store, clock=clock, pending_ttl_ms=1000)
         key = Key(uid(), "reply", 1)
-        hung = asyncio.ensure_future(ro.once(key, lambda ctx: asyncio.Event().wait()))
-        await asyncio.sleep(0.02)
+        started = asyncio.Event()
+
+        async def crash(ctx):
+            started.set()
+            await asyncio.Event().wait()
+
+        hung = asyncio.ensure_future(ro.once(key, crash))
+        await until(started.is_set)
         assert (await ro.once(key, lambda ctx: 1)).status == "in_flight"
         clock.advance(1000)
         assert (await ro.check(key)).status == "ambiguous"

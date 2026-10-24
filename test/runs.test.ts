@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { createReplyOnce } from '../src/index.js';
-import { eachStore, fakeClock, sleep, uid } from './helpers.js';
+import { eachStore, fakeClock, uid, until } from './helpers.js';
 
 function gate() {
   let open!: () => void;
@@ -110,16 +110,18 @@ eachStore('runs and write fencing', (makeStore) => {
     const sent: string[] = [];
     const a = await ro.begin(conv);
     const g = gate();
+    let started = false;
     const aReply = a.once(
       'reply',
       { answers: ['m1'] },
       async () => {
+        started = true;
         await g.p;
         sent.push('A: answer to m1');
       },
       { summary: 'answer to m1' },
     );
-    await sleep(20);
+    await until(() => started);
     // The customer writes again. The new run's context predates A's reply.
     const b = await ro.begin(conv);
     const r1 = await b.once('reply', { answers: ['m1', 'm2'] }, () => sent.push('B: answer to m1+m2'));
@@ -167,8 +169,12 @@ eachStore('runs and write fencing', (makeStore) => {
     const conv = uid();
     const g = gate();
     const a = await ro.begin(conv);
-    const tagging = a.once('add_tag', 'vip', async () => g.p);
-    await sleep(20);
+    let started = false;
+    const tagging = a.once('add_tag', 'vip', async () => {
+      started = true;
+      await g.p;
+    });
+    await until(() => started);
     const b = await ro.begin(conv);
     expect((await b.once('set_status', 'open', () => 1, { conflict: 'same-intent' })).status).toBe('executed');
     expect((await b.once('add_tag', 'other', () => 1, { conflict: 'none' })).status).toBe('executed');

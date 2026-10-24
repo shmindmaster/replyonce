@@ -69,6 +69,15 @@ export function uid(prefix = 'conv'): string {
 
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** Wait until `cond()` holds. A fixed sleep is not enough for a store round trip on a slow runner. */
+export async function until(cond: () => boolean, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!cond()) {
+    if (Date.now() > deadline) throw new Error('until: condition not met in time');
+    await sleep(2);
+  }
+}
+
 /** A controllable clock. */
 export function fakeClock(start = 1_800_000_000_000) {
   let t = start;

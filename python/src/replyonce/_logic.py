@@ -70,6 +70,11 @@ def _is_newer(a: Run, b: Run) -> bool:
         return a["token"] > b["token"]
     if a["orderAt"] != b["orderAt"]:
         return a["orderAt"] > b["orderAt"]
+    # Equal context times order by begin only if neither run gave a contextAt (each read its
+    # context as it began). Otherwise neither is newer: fencing out the wrong one would leave
+    # its message unanswered. Both may write; conflict checks prevent double answers.
+    if a["baseContextAt"] is not None or b["baseContextAt"] is not None:
+        return False
     return a["baseSeq"] > b["baseSeq"]
 
 

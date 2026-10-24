@@ -145,7 +145,9 @@ A claim is decided in this order:
    or waits if you pass `wait`. `ambiguous` calls your reconciler, otherwise reports `ambiguous`.
 2. **May this run write?** It is refused if it was cancelled or has ended, or if its
    fencing token is stale: a newer run took the scope, or a later delivery took the run
-   (`superseded`). A newer run that ended without writing does not count.
+   (`superseded`). A newer run that ended without writing does not count. Two runs whose
+   `contextAt` is the same millisecond are peers: neither supersedes the other, and step 3
+   keeps them from answering the same thing twice.
 3. **Has the conversation changed?** Another run's write that is still pending, or that
    landed after this run last looked, is a conflict. The refusal records an *ack*, so the
    run's next attempt (after it re-reads) can go through.

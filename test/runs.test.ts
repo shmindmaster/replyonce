@@ -32,6 +32,36 @@ eachStore('runs and write fencing', (makeStore) => {
     expect((await newer.once('reply', 1, () => 1)).status).toBe('executed');
   });
 
+  it('runs whose contexts share a timestamp are not fenced by begin order, so every message is answered', async () => {
+    const ro = createReplyOnce({ store: await makeStore() });
+    const conv = uid();
+    const sent: string[][] = [];
+    // m1 and m2 arrive in the same millisecond, and m2's job happens to begin first.
+    const t = Date.now() - 10;
+    const forM2 = await ro.begin(conv, { runId: 'job-m2', contextAt: t });
+    const forM1 = await ro.begin(conv, { runId: 'job-m1', contextAt: t });
+    expect([forM2.state, forM1.state]).toEqual(['new', 'new']);
+    expect((await forM1.once('reply', { answers: ['m1'] }, () => sent.push(['m1']))).status).toBe('executed');
+    await forM1.end();
+    // m2's run must not be refused as superseded by a run that never saw m2.
+    expect(await forM2.once('reply', { answers: ['m1', 'm2'] }, () => sent.push(['m1', 'm2']))).toMatchObject({
+      status: 'refused',
+      reason: 'conversation_changed',
+    });
+    expect((await forM2.once('reply', { answers: ['m2'] }, () => sent.push(['m2']))).status).toBe('executed');
+    expect(sent).toEqual([['m1'], ['m2']]);
+  });
+
+  it('without contextAt, the run that began later is newer even within one millisecond', async () => {
+    const clock = fakeClock();
+    const ro = createReplyOnce({ store: await makeStore(), clock: clock.now });
+    const conv = uid();
+    const a = await ro.begin(conv);
+    const b = await ro.begin(conv);
+    expect(await a.once('reply', 1, () => 'a')).toMatchObject({ status: 'refused', reason: 'superseded' });
+    expect((await b.once('reply', 1, () => 'b')).status).toBe('executed');
+  });
+
   it('a newer run that ended without writing does not silence the older one', async () => {
     const ro = createReplyOnce({ store: await makeStore() });
     const conv = uid();
@@ -188,15 +218,28 @@ eachStore('redelivery', (makeStore) => {
     expect(sends).toBe(1);
   });
 
-  it("redelivering an older run does not take the conversation from a newer one with the same context time", async () => {
+  it('redelivering an older run does not take the conversation from a newer one', async () => {
     const ro = createReplyOnce({ store: await makeStore() });
     const conv = uid();
     const t = Date.now() - 10;
-    await ro.begin(conv, { runId: 'older', contextAt: t });
+    await ro.begin(conv, { runId: 'older', contextAt: t - 1 });
     const newer = await ro.begin(conv, { runId: 'newer', contextAt: t });
-    const redelivered = await ro.begin(conv, { runId: 'older', contextAt: t });
+    // The redelivery gets the highest fencing token, but supersession follows context time.
+    const redelivered = await ro.begin(conv, { runId: 'older', contextAt: t - 1 });
+    expect(redelivered.fencingToken!).toBeGreaterThan(newer.fencingToken!);
     expect(redelivered.state).toBe('superseded');
     expect((await newer.once('reply', { to: 'm2' }, () => 1)).status).toBe('executed');
+  });
+
+  it('redelivering a run does not take the conversation from a peer with the same context time', async () => {
+    const ro = createReplyOnce({ store: await makeStore() });
+    const conv = uid();
+    const t = Date.now() - 10;
+    await ro.begin(conv, { runId: 'first', contextAt: t });
+    const peer = await ro.begin(conv, { runId: 'second', contextAt: t });
+    const redelivered = await ro.begin(conv, { runId: 'first', contextAt: t });
+    expect(redelivered.state).toBe('resumed');
+    expect((await peer.once('reply', { to: 'm2' }, () => 1)).status).toBe('executed');
   });
 
   it('a redelivery that would redo an intent differently is told the conversation changed', async () => {

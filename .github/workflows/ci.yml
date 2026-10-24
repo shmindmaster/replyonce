@@ -38,6 +38,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
+      - name: Chaos demo stress loop (every seed, every store, several passes)
+        if: matrix.node == 24
+        run: npx vitest run test/demo.test.ts
+        env:
+          REPLYONCE_DEMO_REPEAT: 4
       - run: npm run smoke
       - name: Chaos demo (fails on any duplicate)
         run: node dist/cli.js demo --conversations 300

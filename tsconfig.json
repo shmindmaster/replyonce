@@ -21,5 +21,5 @@
       "replyonce/redis": ["./src/stores/redis.ts"]
     }
   },
-  "include": ["src", "test", "examples"]
+  "include": ["src", "test", "examples", "scripts"]
 }

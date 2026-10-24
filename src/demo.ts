@@ -120,9 +120,13 @@ function naiveAgent(world: World): Agent {
 function guardedAgent(world: World, store: Store): Agent {
   const ro = createReplyOnce({
     store,
-    pendingTtlMs: 150,
+    pendingTtlMs: 2_000,
     maxAttempts: 6,
     leaseTtlMs: 5_000,
+    // A settle after the claim was given up on means pendingTtlMs was too short for this host.
+    onEvent: (e) => {
+      if (e.type === 'late_settle') world.faults.lateSettle = (world.faults.lateSettle ?? 0) + 1;
+    },
     // Look the message up on the provider by the idempotency key it was sent with.
     reconcile: async (entry) => {
       const idem = providerIdempotencyKey(entry.scope, entry.key);
@@ -135,7 +139,8 @@ function guardedAgent(world: World, store: Store): Agent {
     if (!run.canWrite) return;
     let inbound = job.inboundAtEnqueue;
     let done = job.answeredAtEnqueue;
-    for (let round = 0; round < 40; round++) {
+    const giveUpAt = Date.now() + 15_000;
+    while (Date.now() < giveUpAt) {
       const todo = inbound.filter((m) => !done.has(m));
       if (todo.length === 0) break;
       const identity = { answers: todo };
@@ -146,11 +151,12 @@ function guardedAgent(world: World, store: Store): Agent {
           await providerSend(world, { conv: job.conv, answers: todo, idem: ctx.idempotencyKey });
           if (crash) await hang();
         },
-        { summary: `reply to ${todo.join(', ')}`, wait: { timeoutMs: 400, intervalMs: 10 } },
+        { summary: `reply to ${todo.join(', ')}`, wait: { timeoutMs: 5_000, intervalMs: 10 } },
       );
       if (res.ok) break;
       if (res.status === 'refused' && res.reason === 'conversation_changed') {
-        await sleep(5);
+        // Another run's reply may still be in flight; give it a moment, then re-read.
+        await sleep(res.conflicts?.some((c) => c.status === 'pending') ? 25 : 5);
         inbound = world.inbound.get(job.conv) ?? [];
         done = answered(world, job.conv);
         continue;
@@ -263,6 +269,8 @@ export function formatReport(r: DemoReport): string {
     '',
     r.with.duplicateAnswers === 0
       ? '  No customer message was answered twice with replyonce.'
-      : '  Duplicates remained with replyonce. Please report this: https://github.com/shmindmaster/replyonce/issues',
+      : r.faults.with.lateSettle
+        ? '  Duplicates happened after this host stalled past pendingTtlMs (see lateSettle): the limit described in the README.'
+        : '  Duplicates remained with replyonce. Please report this: https://github.com/shmindmaster/replyonce/issues',
   ].join('\n');
 }

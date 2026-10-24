@@ -24,6 +24,8 @@ replyonce sits between your agent and its side effects:
 
 Zero runtime dependencies. Node 18+. Stores for memory, Postgres and Redis. Adapters for
 tool-calling loops (OpenAI and Anthropic shapes), webhook handlers and BullMQ workers.
+A [Python port](python/) (asyncio, 3.10+) uses the same state machine and state format,
+so Node and Python workers can share one store. CI checks that both ways.
 
 ```text
 $ npx replyonce demo

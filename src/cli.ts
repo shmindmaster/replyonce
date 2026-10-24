@@ -11,13 +11,13 @@ async function main(argv: string[]): Promise<number> {
     console.log(HELP);
     return command === undefined || command === '--help' || command === '-h' ? 0 : 1;
   }
-  const opt = (name: string, fallback: number) => {
+  const opt = (name: string, fallback: number, min: number) => {
     const i = rest.indexOf(`--${name}`);
     const v = i >= 0 ? Number(rest[i + 1]) : fallback;
-    if (!Number.isInteger(v) || v <= 0) throw new Error(`--${name} must be a positive integer`);
+    if (!Number.isInteger(v) || v < min) throw new Error(`--${name} must be an integer >= ${min}`);
     return v;
   };
-  const report = await runDemo({ conversations: opt('conversations', 100), seed: opt('seed', 7) });
+  const report = await runDemo({ conversations: opt('conversations', 100, 1), seed: opt('seed', 7, 0) });
   console.log(formatReport(report));
   return report.with.duplicateAnswers === 0 ? 0 : 2;
 }

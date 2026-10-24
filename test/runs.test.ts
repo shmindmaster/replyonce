@@ -188,17 +188,40 @@ eachStore('redelivery', (makeStore) => {
     expect(sends).toBe(1);
   });
 
+  it("redelivering an older run does not take the conversation from a newer one with the same context time", async () => {
+    const ro = createReplyOnce({ store: await makeStore() });
+    const conv = uid();
+    const t = Date.now() - 10;
+    await ro.begin(conv, { runId: 'older', contextAt: t });
+    const newer = await ro.begin(conv, { runId: 'newer', contextAt: t });
+    const redelivered = await ro.begin(conv, { runId: 'older', contextAt: t });
+    expect(redelivered.state).toBe('superseded');
+    expect((await newer.once('reply', { to: 'm2' }, () => 1)).status).toBe('executed');
+  });
+
   it('a redelivery that would redo an intent differently is told the conversation changed', async () => {
     const ro = createReplyOnce({ store: await makeStore() });
     const conv = uid();
     const first = await ro.begin(conv, { runId: 'job-8' });
     await first.once('reply', { answers: ['m2'] }, () => 'narrow');
     const second = await ro.begin(conv, { runId: 'job-8' });
+    // Other steps are not blocked by the earlier delivery's reply...
+    expect((await second.once('add_tag', 'done', () => 1)).status).toBe('executed');
+    // ...and writing them does not hide that reply from a reworded one.
     expect(await second.once('reply', { answers: ['m1', 'm2'] }, () => 'wide')).toMatchObject({
       status: 'refused',
       reason: 'conversation_changed',
     });
-    expect((await second.once('add_tag', 'done', () => 1)).status).toBe('executed');
+  });
+
+  it('a write under a narrow conflict mode does not hide unseen writes from a later check', async () => {
+    const ro = createReplyOnce({ store: await makeStore() });
+    const conv = uid();
+    const b = await ro.begin(conv);
+    // A write on the conversation from outside any run (it never supersedes b).
+    await ro.once({ scope: conv, intent: 'add_tag', payload: 'vip' }, () => 1);
+    expect((await b.once('set_status', 'open', () => 1, { conflict: 'same-intent' })).status).toBe('executed');
+    expect(await b.once('reply', 1, () => 1)).toMatchObject({ status: 'refused', reason: 'conversation_changed' });
   });
 });
 

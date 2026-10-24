@@ -63,11 +63,14 @@ function isLive(r: RunRecord, now: number): boolean {
   return r.endedAt === null && r.leaseExpiresAt > now;
 }
 
-/** Is `a` newer than `b`? Exclusive leases order by token; otherwise by context recency. */
+/**
+ * Is `a` newer than `b`? Exclusive leases order by token; otherwise by context recency, then
+ * by when the run first began. Never by token there: a redelivery bumps an old run's token.
+ */
 function isNewer(a: RunRecord, b: RunRecord): boolean {
   if (a.mode === 'exclusive' && b.mode === 'exclusive') return a.token > b.token;
   if (a.orderAt !== b.orderAt) return a.orderAt > b.orderAt;
-  return a.token > b.token;
+  return a.baseSeq > b.baseSeq;
 }
 
 /**
@@ -359,10 +362,10 @@ export function claim(
   };
   s.effects[input.key] = entry;
   if (run) {
+    // A claim does not mark anything seen: writes this check deliberately skipped (other
+    // intents, or `none`) must still be reported to a later check that covers them.
     run.wrote = true;
     run.leaseExpiresAt = Math.max(run.leaseExpiresAt, now + input.leaseTtlMs);
-    // Passing the conflict check means nothing unseen had landed: the run is current.
-    markSeen(run, seq, now);
   }
   return { next: s, result: { kind: 'acquired', entry } };
 }

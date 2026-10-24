@@ -23,3 +23,5 @@ First release.
 - Adapters: guarded tools with OpenAI and Anthropic tool shapes, a read-only
   `check_already_done` tool, a webhook handler with HTTP status mapping, and a BullMQ processor wrapper.
 - `npx replyonce demo` chaos simulation.
+- Python port (`pip install replyonce`): asyncio API with the same state machine, key
+  hashing and store layout, so Node and Python workers can share a store.

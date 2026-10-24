@@ -5,6 +5,12 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+- Fixed: `PostgresStore.migrate()` (TypeScript and Python) is safe when several workers call
+  it at once. Concurrent `CREATE TABLE IF NOT EXISTS` could fail with a unique-violation on
+  `pg_type`; migrations of the same table are now serialized with an advisory lock. Found by
+  the new Windows CI job.
+- CI runs every job on Ubuntu, macOS and Windows against real Postgres and Redis.
+
 ## 0.1.0 - 2026-10-23
 
 First release.

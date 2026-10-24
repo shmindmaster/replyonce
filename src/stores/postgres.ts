@@ -58,8 +58,30 @@ export class PostgresStore implements Store {
     this.table = quoteTable(this.tableName);
   }
 
+  /**
+   * Creates the table if it does not exist. Safe to call from several workers at once:
+   * `CREATE TABLE IF NOT EXISTS` alone is not, because two sessions can both pass the
+   * existence check and one then fails on the catalog's unique index, so concurrent
+   * migrations of the same table are serialized with a transaction-scoped advisory lock.
+   */
   async migrate(): Promise<void> {
-    await this.pool.query(postgresSchemaSql(this.tableName));
+    const client = await this.pool.connect();
+    let broken: Error | undefined;
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`replyonce:migrate:${this.tableName}`]);
+      await client.query(postgresSchemaSql(this.tableName));
+      await client.query('COMMIT');
+    } catch (err) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackErr) {
+        broken = rollbackErr as Error;
+      }
+      throw err;
+    } finally {
+      client.release(broken);
+    }
   }
 
   async read(scope: string): Promise<ScopeState | null> {

@@ -49,8 +49,15 @@ class PostgresStore:
         self._t = _quote_table(table)
 
     async def migrate(self) -> None:
+        """Create the table if needed. Safe from several workers at once: concurrent
+        ``CREATE TABLE IF NOT EXISTS`` can fail on the catalog's unique index, so migrations
+        of the same table are serialized with a transaction-scoped advisory lock."""
         async with self._pool.connection() as conn:
-            await conn.execute(postgres_schema_sql(self.table_name))
+            async with conn.transaction():
+                await conn.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))", (f"replyonce:migrate:{self.table_name}",)
+                )
+                await conn.execute(postgres_schema_sql(self.table_name))
 
     async def read(self, scope: str) -> Optional[dict]:
         async with self._pool.connection() as conn:

@@ -12,36 +12,24 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  REPLYONCE_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
+  REPLYONCE_REDIS_URL: redis://localhost:6379
+  DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+  REDIS_URL: redis://localhost:6379
+
 jobs:
   test:
-    name: test (node ${{ matrix.node }}, memory + postgres + redis)
-    runs-on: ubuntu-latest
+    name: test (node ${{ matrix.node }}, ${{ matrix.os }}, memory + postgres + redis)
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node: [22, 24, 26]
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s --health-timeout 5s --health-retries 30
-      redis:
-        image: redis:7-alpine
-        ports: ['6379:6379']
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 2s --health-timeout 5s --health-retries 30
-    env:
-      REPLYONCE_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
-      REPLYONCE_REDIS_URL: redis://localhost:6379
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
-      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/backends
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
@@ -54,13 +42,14 @@ jobs:
       - name: Chaos demo (fails on any duplicate)
         run: node dist/cli.js demo --conversations 300
       - name: Examples
+        shell: bash
         run: |
           npx tsx examples/quickstart.ts
           npx tsx examples/agent-loop.ts
           npx tsx examples/webhook-server.ts
           npx tsx examples/postgres.ts
           npx tsx examples/bullmq-worker.ts
-      - if: matrix.node == 24
+      - if: matrix.node == 24 && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v7
         with:
           name: package
@@ -70,35 +59,20 @@ jobs:
           retention-days: 3
 
   python:
-    name: python ${{ matrix.python }} (memory + postgres + redis)
-    runs-on: ubuntu-latest
+    name: python ${{ matrix.python }} (${{ matrix.os }}, memory + postgres + redis)
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ['3.10', '3.13']
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s --health-timeout 5s --health-retries 30
-      redis:
-        image: redis:7-alpine
-        ports: ['6379:6379']
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 2s --health-timeout 5s --health-retries 30
-    env:
-      REPLYONCE_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
-      REPLYONCE_REDIS_URL: redis://localhost:6379
     defaults:
       run:
         working-directory: python
+        shell: bash
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/backends
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           python-version: ${{ matrix.python }}
@@ -109,33 +83,25 @@ jobs:
       - run: uv build
       - name: Wheel installs and runs without dev dependencies
         run: |
-          uv venv /tmp/wheel-check
-          uv pip install --python /tmp/wheel-check dist/*.whl
-          /tmp/wheel-check/bin/replyonce demo --conversations 30
+          venv="$RUNNER_TEMP/wheel-check"
+          uv venv "$venv"
+          uv pip install --python "$venv" dist/*.whl
+          if [ "$RUNNER_OS" = Windows ]; then bin="$venv/Scripts"; else bin="$venv/bin"; fi
+          "$bin/replyonce" demo --conversations 30
 
   interop:
-    name: typescript and python share one store
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s --health-timeout 5s --health-retries 30
-      redis:
-        image: redis:7-alpine
-        ports: ['6379:6379']
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 2s --health-timeout 5s --health-retries 30
-    env:
-      REPLYONCE_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
-      REPLYONCE_REDIS_URL: redis://localhost:6379
+    name: typescript and python share one store (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
+      - uses: ./.github/actions/backends
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -147,18 +113,19 @@ jobs:
       - run: uv sync --project python
       - name: TS writes, Python replays and supersedes, TS observes
         run: |
-          SCOPE="interop-${GITHUB_RUN_ID}"
+          SCOPE="interop-${GITHUB_RUN_ID}-${RUNNER_OS}"
           npx tsx scripts/interop.ts 1 "$SCOPE"
           uv run --project python python python/scripts/interop.py "$SCOPE"
           npx tsx scripts/interop.ts 3 "$SCOPE"
 
   compat:
-    name: built package on node ${{ matrix.node }}
+    name: built package on node ${{ matrix.node }} (${{ matrix.os }})
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node: [18, 20]
     steps:
       - uses: actions/checkout@v7

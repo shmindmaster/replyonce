@@ -1,9 +1,10 @@
-import { formatReport, runDemo } from './demo.js';
+import { formatReport, runDemo, shouldColor } from './demo.js';
 
 const HELP = `Usage: replyonce demo [--conversations N] [--seed N]
 
 Runs a chaos simulation of a support agent with and without replyonce and prints
-how many customer messages were answered twice.`;
+how many customer messages were answered twice. The same --seed always gives the
+same counts. Set FORCE_COLOR=1 for colour when output is piped or recorded.`;
 
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
@@ -18,7 +19,7 @@ async function main(argv: string[]): Promise<number> {
     return v;
   };
   const report = await runDemo({ conversations: opt('conversations', 100, 1), seed: opt('seed', 7, 0) });
-  console.log(formatReport(report));
+  console.log(formatReport(report, { color: shouldColor() }));
   return report.with.duplicateAnswers === 0 ? 0 : 2;
 }
 

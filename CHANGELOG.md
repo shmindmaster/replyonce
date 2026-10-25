@@ -5,6 +5,13 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+- `replyonce demo --seed N` is deterministic: the in-memory demo runs on simulated time, so a
+  seed always prints the same counts (and finishes faster). `runDemo` with a `store` still runs
+  on the wall clock; `realTime` chooses explicitly.
+- The demo CLI colours its report (duplicates, unanswered, verdict) in a terminal and honours
+  `FORCE_COLOR` when piped or recorded; `FORCE_COLOR=0` or `NO_COLOR` turn colour off.
+- `ReplyOnceOptions.sleep`: an optional wait function, used with `clock` to run on simulated time.
+
 ## 0.1.2 - 2026-10-24
 
 Python package only. The npm package's first published version, 0.1.0, already includes this

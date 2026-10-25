@@ -34,18 +34,19 @@ against real Postgres and Redis on all three.
 ```text
 $ npx replyonce demo
 replyonce demo: 100 simulated support conversations under injected faults
-  without: workerCrash=9, duplicateDelivery=14, customerBurst=22, timeoutAfterSend=29, timeoutBeforeSend=15
-  with:    workerCrash=10, duplicateDelivery=15, customerBurst=22, timeoutAfterSend=18, timeoutBeforeSend=12
+  without: workerCrash=12, duplicateDelivery=16, customerBurst=22, timeoutBeforeSend=14, timeoutAfterSend=20
+  with:    workerCrash=10, duplicateDelivery=15, customerBurst=22, timeoutBeforeSend=10, timeoutAfterSend=21
 
                    messages replies duplicates  unanswered
-  without               122     174         74           0
-  with replyonce        122     120          0           0
+  without               122     170         72           0
+  with replyonce        122     122          0           0
 
   No customer message was answered twice with replyonce.
 ```
 
-The demo is a simulation, so the counts vary from run to run. CI runs it on every push
-and fails if a single duplicate gets through.
+The demo runs on simulated time, so a seed always gives the same counts: `--seed N` (default 7)
+picks another run. CI runs it on every push and fails if a single duplicate gets through.
+Set `FORCE_COLOR=1` to keep its colour when the output is piped or recorded.
 
 ## 30-second quickstart
 

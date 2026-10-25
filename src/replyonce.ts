@@ -66,6 +66,8 @@ export interface ReplyOnceOptions {
   reconcile?: Reconciler;
   onEvent?: (event: ReplyOnceEvent) => void;
   clock?: () => number;
+  /** Wait between settle retries and `wait` polls. Pass with `clock` to run on simulated time. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface OnceOptions {
@@ -120,6 +122,7 @@ export class ReplyOnce {
   private readonly reconciler: Reconciler | undefined;
   private readonly emit: (event: ReplyOnceEvent) => void;
   private readonly now: () => number;
+  private readonly sleep: (ms: number) => Promise<void>;
 
   constructor(options: ReplyOnceOptions) {
     if (!options || !options.store) throw new TypeError('replyonce: a store is required');
@@ -146,6 +149,7 @@ export class ReplyOnce {
         }
       : () => {};
     this.now = options.clock ?? Date.now;
+    this.sleep = options.sleep ?? sleep;
   }
 
   /** Resolve key parts to the ledger key used for them. */
@@ -453,7 +457,7 @@ export class ReplyOnce {
         return await this.store.transact(scope, (s) => logic.settle(s, { ...input, now }, this.policy));
       } catch (err) {
         lastError = err;
-        await sleep(25 * 4 ** i);
+        await this.sleep(25 * 4 ** i);
       }
     }
     throw lastError;
@@ -461,7 +465,7 @@ export class ReplyOnce {
 
   private async waitForSettle(scope: string, key: string, until: number, intervalMs: number): Promise<void> {
     while (this.now() < until) {
-      await sleep(Math.min(intervalMs, Math.max(1, until - this.now())));
+      await this.sleep(Math.min(intervalMs, Math.max(1, until - this.now())));
       const e = (await this.store.read(scope))?.effects[key];
       if (!e || logic.effectiveStatus(e, this.now(), this.policy) !== 'pending') return;
     }

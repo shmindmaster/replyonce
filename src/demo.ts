@@ -16,6 +16,12 @@ export interface DemoOptions {
   conversations?: number;
   seed?: number;
   store?: Store;
+  /**
+   * Run on the wall clock instead of simulated time. Simulated time makes every count a function
+   * of the seed; real time explores timing a single seed cannot. Defaults to real time when a
+   * `store` is passed (shared stores do real I/O) and simulated time otherwise.
+   */
+  realTime?: boolean;
 }
 
 export interface DemoStats {
@@ -56,8 +62,47 @@ function rng(seed: number): () => number {
   };
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const hang = () => new Promise<never>(() => {});
+
+interface Clock {
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+}
+
+const wallClock: Clock = { now: Date.now, sleep: (ms) => new Promise<void>((r) => setTimeout(r, ms)) };
+
+/**
+ * Simulated time: timers fire one at a time in deadline order (ties in the order they were set),
+ * each only after every pending promise has settled. With the in-memory store nothing else can
+ * interleave, so a seed always replays the same run, and no real time passes.
+ */
+class SimulatedClock implements Clock {
+  private t = Date.UTC(2026, 0, 1);
+  private seq = 0;
+  private readonly timers: Array<{ at: number; seq: number; fire: () => void }> = [];
+  readonly now = () => this.t;
+  readonly sleep = (ms: number) =>
+    new Promise<void>((fire) => {
+      this.timers.push({ at: this.t + Math.max(0, ms), seq: this.seq++, fire });
+    });
+
+  async run<T>(work: Promise<T>): Promise<T> {
+    let settled = false;
+    work.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    for (;;) {
+      await new Promise<void>((r) => setImmediate(r));
+      if (settled) return work;
+      if (this.timers.length === 0) throw new Error('replyonce demo: the simulation stalled');
+      this.timers.sort((a, b) => a.at - b.at || a.seq - b.seq);
+      const next = this.timers.shift()!;
+      this.t = next.at;
+      next.fire();
+    }
+  }
+}
 
 interface Job {
   id: string;
@@ -74,6 +119,7 @@ interface World {
   sent: SentReply[];
   faults: Record<string, number>;
   rand: () => number;
+  clock: Clock;
 }
 
 function answered(world: World, conv: string): Set<string> {
@@ -84,7 +130,7 @@ function answered(world: World, conv: string): Set<string> {
 
 /** Provider send with injected faults. Like most chat APIs it does not dedupe. */
 async function providerSend(world: World, reply: SentReply): Promise<void> {
-  await sleep(1 + world.rand() * 4);
+  await world.clock.sleep(1 + world.rand() * 4);
   const roll = world.rand();
   if (roll < 0.15) {
     world.sent.push(reply);
@@ -102,7 +148,7 @@ type Agent = (job: Job, crashAfterSend: boolean) => Promise<void>;
 
 function naiveAgent(world: World): Agent {
   return async (job, crash) => {
-    await sleep(2 + world.rand() * 10);
+    await world.clock.sleep(2 + world.rand() * 10);
     const todo = job.inboundAtEnqueue.filter((m) => !job.answeredAtEnqueue.has(m));
     if (todo.length === 0) return;
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -123,6 +169,8 @@ function guardedAgent(world: World, store: Store): Agent {
     pendingTtlMs: 2_000,
     maxAttempts: 6,
     leaseTtlMs: 5_000,
+    clock: world.clock.now,
+    sleep: world.clock.sleep,
     // A settle after the claim was given up on means pendingTtlMs was too short for this host.
     onEvent: (e) => {
       if (e.type === 'late_settle') world.faults.lateSettle = (world.faults.lateSettle ?? 0) + 1;
@@ -134,13 +182,13 @@ function guardedAgent(world: World, store: Store): Agent {
     },
   });
   return async (job, crash) => {
-    await sleep(2 + world.rand() * 10);
+    await world.clock.sleep(2 + world.rand() * 10);
     const run = await ro.begin(job.conv, { runId: job.id, contextAt: job.contextAt });
     if (!run.canWrite) return;
     let inbound = job.inboundAtEnqueue;
     let done = job.answeredAtEnqueue;
-    const giveUpAt = Date.now() + 15_000;
-    while (Date.now() < giveUpAt) {
+    const giveUpAt = world.clock.now() + 15_000;
+    while (world.clock.now() < giveUpAt) {
       const todo = inbound.filter((m) => !done.has(m));
       if (todo.length === 0) break;
       const identity = { answers: todo };
@@ -156,21 +204,31 @@ function guardedAgent(world: World, store: Store): Agent {
       if (res.ok) break;
       if (res.status === 'refused' && res.reason === 'conversation_changed') {
         // Another run's reply may still be in flight; give it a moment, then re-read.
-        await sleep(res.conflicts?.some((c) => c.status === 'pending') ? 25 : 5);
+        await world.clock.sleep(res.conflicts?.some((c) => c.status === 'pending') ? 25 : 5);
         inbound = world.inbound.get(job.conv) ?? [];
         done = answered(world, job.conv);
         continue;
       }
       if (res.status === 'refused') break;
-      await sleep(10);
+      await world.clock.sleep(10);
     }
     await run.end();
   };
 }
 
-async function simulate(conversations: number, seed: number, makeAgent: (w: World) => Agent): Promise<DemoStats & { faults: Record<string, number> }> {
-  const world: World = { inbound: new Map(), sent: [], faults: {}, rand: rng(seed) };
-  const agent = makeAgent(world);
+type Outcome = DemoStats & { faults: Record<string, number> };
+
+function simulate(conversations: number, seed: number, realTime: boolean, makeAgent: (w: World) => Agent): Promise<Outcome> {
+  const clock = realTime ? wallClock : new SimulatedClock();
+  const world: World = { inbound: new Map(), sent: [], faults: {}, rand: rng(seed), clock };
+  // Shared stores outlive a run, so real-time runs keep their conversations apart.
+  const ns = realTime ? Math.random().toString(36).slice(2, 10) : `seed${seed}`;
+  const play = () => playOut(world, conversations, ns, makeAgent(world));
+  return clock instanceof SimulatedClock ? clock.run(play()) : play();
+}
+
+async function playOut(world: World, conversations: number, ns: string, agent: Agent): Promise<Outcome> {
+  const { sleep } = world.clock;
   const tasks: Promise<void>[] = [];
   let jobSeq = 0;
 
@@ -201,11 +259,10 @@ async function simulate(conversations: number, seed: number, makeAgent: (w: Worl
       msgId,
       answeredAtEnqueue: answered(world, conv),
       inboundAtEnqueue: [...list],
-      contextAt: Date.now(),
+      contextAt: world.clock.now(),
     });
   };
 
-  const ns = Math.random().toString(36).slice(2, 10);
   for (let i = 0; i < conversations; i++) {
     const conv = `demo-${ns}-conversation-${i}`;
     enqueue(conv, `${conv}/m1`);
@@ -245,21 +302,43 @@ async function simulate(conversations: number, seed: number, makeAgent: (w: Worl
 export async function runDemo(options: DemoOptions = {}): Promise<DemoReport> {
   const conversations = options.conversations ?? 100;
   const seed = options.seed ?? 7;
-  const { faults: withoutFaults, ...without } = await simulate(conversations, seed, naiveAgent);
+  const realTime = options.realTime ?? options.store !== undefined;
+  const { faults: withoutFaults, ...without } = await simulate(conversations, seed, realTime, naiveAgent);
   const store = options.store ?? new MemoryStore();
-  const { faults: withFaults, ...guarded } = await simulate(conversations, seed, (w) => guardedAgent(w, store));
+  const { faults: withFaults, ...guarded } = await simulate(conversations, seed, realTime, (w) => guardedAgent(w, store));
   return { without, with: guarded, faults: { without: withoutFaults, with: withFaults } };
 }
 
-export function formatReport(r: DemoReport): string {
+/**
+ * FORCE_COLOR turns colour on even when output is piped or recorded (FORCE_COLOR=0 or false turns it
+ * off); otherwise NO_COLOR turns it off and a terminal turns it on. Same precedence as Node itself.
+ */
+export function shouldColor(env: NodeJS.ProcessEnv = process.env, isTTY = process.stdout.isTTY): boolean {
+  const force = env.FORCE_COLOR;
+  if (force !== undefined) return !['0', 'false'].includes(force.trim().toLowerCase());
+  if (env.NO_COLOR) return false;
+  return Boolean(isTTY);
+}
+
+export interface FormatOptions {
+  /** ANSI colour: duplicates and unanswered in red, zeroes and the verdict in green. */
+  color?: boolean;
+}
+
+export function formatReport(r: DemoReport, options: FormatOptions = {}): string {
+  const paint = (code: number) => (s: string) => (options.color ? `\x1b[${code}m${s}\x1b[0m` : s);
+  const red = paint(31);
+  const green = paint(32);
+  const bold = paint(1);
+  const count = (n: number, width: number) => (n === 0 ? green : red)(String(n).padStart(width));
   const row = (label: string, s: DemoStats) =>
-    `  ${label.padEnd(16)} ${String(s.customerMessages).padStart(8)} ${String(s.repliesSent).padStart(7)} ${String(s.duplicateAnswers).padStart(10)} ${String(s.unanswered).padStart(11)}`;
+    `  ${label.padEnd(16)} ${String(s.customerMessages).padStart(8)} ${String(s.repliesSent).padStart(7)} ${count(s.duplicateAnswers, 10)} ${count(s.unanswered, 11)}`;
   const faults = (f: Record<string, number>) =>
     Object.entries(f)
       .map(([k, v]) => `${k}=${v}`)
       .join(', ');
   return [
-    `replyonce demo: ${r.without.conversations} simulated support conversations under injected faults`,
+    bold(`replyonce demo: ${r.without.conversations} simulated support conversations under injected faults`),
     `  without: ${faults(r.faults.without)}`,
     `  with:    ${faults(r.faults.with)}`,
     '',
@@ -268,9 +347,11 @@ export function formatReport(r: DemoReport): string {
     row('with replyonce', r.with),
     '',
     r.with.duplicateAnswers === 0
-      ? '  No customer message was answered twice with replyonce.'
-      : r.faults.with.lateSettle
-        ? '  Duplicates happened after this host stalled past pendingTtlMs (see lateSettle): the limit described in the README.'
-        : '  Duplicates remained with replyonce. Please report this: https://github.com/shmindmaster/replyonce/issues',
+      ? green('  No customer message was answered twice with replyonce.')
+      : red(
+          r.faults.with.lateSettle
+            ? '  Duplicates happened after this host stalled past pendingTtlMs (see lateSettle): the limit described in the README.'
+            : '  Duplicates remained with replyonce. Please report this: https://github.com/shmindmaster/replyonce/issues',
+        ),
   ].join('\n');
 }

@@ -5,6 +5,8 @@
 [![CI](https://github.com/shmindmaster/replyonce/actions/workflows/ci.yml/badge.svg)](https://github.com/shmindmaster/replyonce/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
+![80 duplicate customer replies without replyonce, 0 with it, across 100 simulated support conversations under injected faults](docs/media/replyonce-demo.gif)
+
 Agents retry tool calls. Queues redeliver jobs. Webhooks arrive twice. A deploy kills a
 run halfway, and a customer's second message starts a new run while the first one is still
 answering. The customer gets two replies, or two refunds, or two tickets, and the agent

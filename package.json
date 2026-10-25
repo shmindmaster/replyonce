@@ -1,6 +1,6 @@
 {
   "name": "replyonce",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Stop your agent from replying, refunding or ticketing twice. Idempotency keys, per-conversation write fencing and an effect ledger for tool-calling agents, webhook handlers and queue workers.",
   "license": "Apache-2.0",
   "author": "Sarosh Hussain (https://github.com/shmindmaster)",

@@ -5,6 +5,10 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+## 0.1.1 (npm) - 2026-10-25
+
+npm package only; the Python package's own 0.1.1 is listed below.
+
 - `replyonce demo --seed N` is deterministic: the in-memory demo runs on simulated time, so a
   seed always prints the same counts (and finishes faster). `runDemo` with a `store` still runs
   on the wall clock; `realTime` chooses explicitly.

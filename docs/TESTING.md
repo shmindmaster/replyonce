@@ -15,7 +15,7 @@ memory, plus Postgres when `REPLYONCE_PG_URL` is set and Redis when
 | `once.test.ts` | The ledger: replay, `NotApplied`, ambiguous, reconcile, resolve |
 | `runs.test.ts` | Runs: supersede, exclusive leases, redelivery, the conversation fence |
 | `race.test.ts` | Parallel workers, redelivery storms, concurrent runs on one scope |
-| `demo.test.ts` | The chaos demo on every store: no duplicate, none unanswered, same counts per seed |
+| `demo.test.ts` | The chaos demo on every store: no duplicate, none unanswered. Same counts per seed is checked on the simulated-time memory demo only |
 | `adapters.test.ts` | Tools, webhooks, BullMQ |
 | `key.test.ts`, `migrate.test.ts` | Key hashing, concurrent `migrate()` |
 | `cli.test.ts` | The built CLI. Skipped until `dist/` exists. |
@@ -35,6 +35,6 @@ These run in the release workflows or by hand, not on pull requests:
 | --- | --- |
 | Build and `cli.test.ts` | `docker compose run --rm test sh -c "npm run build && npm test"` |
 | CJS and ESM smoke | `docker compose run --rm test sh -c "npm run build && npm run smoke"` (also in `release.yml`) |
-| Examples | `docker compose run --rm test npx tsx examples/quickstart.ts`, and the other files in `examples/` |
+| Examples | `docker compose run --rm test sh -c "npm run build && npx tsx examples/quickstart.ts"` (examples import the built `replyonce`), and the other files in `examples/` |
 | Node and Python on one store | `scripts/interop.ts` phases 1 and 3 around `python/scripts/interop.py` |
 | Node 18 and 20 | The package declares Node 18+. No job checks the built output there now. |

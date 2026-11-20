@@ -5,14 +5,16 @@ is the map.
 
 | Import | Exports |
 | --- | --- |
-| `replyonce` | `createReplyOnce`, `MemoryStore`, `NotApplied`, `ReplyOnceError`, `unwrap`, key helpers (`effectKey`, `hashPayload`, `providerIdempotencyKey`, `canonicalJson`) |
+| `replyonce` | `createReplyOnce`, `ReplyOnce`, `Run`, `MemoryStore`, `NotApplied`, `ReplyOnceError`, `defaultClassifyError`, `unwrap`, key helpers (`effectKey`, `hashPayload`, `providerIdempotencyKey`, `canonicalJson`) |
 | `replyonce/postgres` | `PostgresStore`, `postgresSchemaSql` |
-| `replyonce/redis` | `RedisStore` |
-| `replyonce/adapters` | `guardTool`, `checkTool`, `dispatchTool`, `toOpenAITool`, `toAnthropicTool`, `webhookOnce`, `httpStatusFor`, `onceProcessor`, `ScopeBusyError` |
+| `replyonce/redis` | `RedisStore`, `StoreContentionError` |
+| `replyonce/adapters` | `guardTool`, `checkTool`, `dispatchTool`, `describeOutcome`, `toOpenAITool`, `toAnthropicTool`, `webhookOnce`, `httpStatusFor`, `onceProcessor`, `ScopeBusyError` |
 
-`ro.once({ scope, intent, payload }, fn)` runs `fn` at most once for that
-business identity. A race returns `executed` for the winner and `in_flight`
-or `replayed` for the rest.
+`ro.once({ scope, intent, payload }, fn)` applies the effect at most once for
+that business identity. A race returns `executed` for the winner and
+`in_flight` or `replayed` for the rest. A call whose `fn` threw `NotApplied`
+or a retryable error is `failed`, and a later call with the same key runs `fn`
+again.
 
 A conversational run (`ro.begin(scope, { runId, contextAt })`) is one inbound
 message or one queue job. Customer-visible writes go through `run.once`. The
@@ -21,7 +23,8 @@ write is pending, or landed after this run read the conversation.
 
 ## Results
 
-Every `once` returns a result instead of throwing. Store outages do throw.
+Every `once` returns a result instead of throwing. Store outages throw, and so
+do invalid keys (an empty scope or a circular payload), before the store is touched.
 
 | `status` | Meaning |
 | --- | --- |
@@ -51,5 +54,7 @@ BullMQ. See [python/README.md](../python/README.md).
 
 `replyonce demo [--conversations N] [--seed N]` (Node: `npx replyonce demo`
 or `node dist/cli.js demo` after a build; Python: `replyonce demo`). The
-defaults are 100 conversations and seed 7. `FORCE_COLOR=1` keeps the colours
-when output is piped; `FORCE_COLOR=0` or `NO_COLOR` turn them off.
+defaults are 100 conversations and seed 7. The Node CLI colours its output on a
+terminal: `FORCE_COLOR=1` keeps the colours when piped, `FORCE_COLOR=0` turns
+them off, and `NO_COLOR` turns them off when `FORCE_COLOR` is unset. The Python
+CLI prints plain text.

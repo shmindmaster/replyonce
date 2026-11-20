@@ -58,4 +58,7 @@ or a person resolves it. The README has the claim order and the effect state
 diagram.
 
 Node and Python persist the same state format and hash keys identically, so
-they can share one Postgres table or Redis prefix.
+they can share one Postgres table or Redis prefix. One exception: a
+non-integer float that Python prints in exponent form (below `1e-4` or from
+`1e16`) hashes differently from Node, so keep such numbers out of payloads,
+or pass them as strings, when both languages write one scope.

@@ -25,8 +25,11 @@ status, attempt, run and token, `summary`, stored `result` or `error`, claim
 and settle times). Node and Python write the same document. Do not change a
 field without a migration test in both trees.
 
-Settled effects and ended runs are pruned after `retentionMs` (default 7
-days). Ambiguous effects are kept until resolved. `summary`, results and
+Settled effects and ended runs older than `retentionMs` (default 7 days) are
+dropped the next time their scope is written, not on a timer, so an idle scope
+keeps them. Ambiguous effects are never pruned by `retentionMs`. A Redis key
+still expires `keyTtlMs` after its last write, and that removes the whole
+scope, unresolved effects included. `summary`, results and
 error text can hold personal data; see [SECURITY.md](SECURITY.md).
 
 The demo does not persist. Postgres and Redis in `compose.yaml` are empty

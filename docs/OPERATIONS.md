@@ -45,5 +45,6 @@ reason to call the provider again.
 `onEvent` reports `claimed`, `committed`, `replayed`, `in_flight`, `failed`,
 `refused`, `ambiguous`, `reconciled`, `late_settle` and
 `unserializable_result`. Alert on `ambiguous` (the outcome is unknown) and
-`late_settle` (an effect settled after `pendingTtlMs`, so raise it). There is no background reconciler: an ambiguous
-effect stays until the key is claimed again or someone resolves it.
+`late_settle` (the effect ran, but it settled after `pendingTtlMs` or the
+ledger write failed and the claim stays pending; raise `pendingTtlMs` or check
+the store). There is no background reconciler: an ambiguous effect stays until the key is claimed again or someone resolves it.

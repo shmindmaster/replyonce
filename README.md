@@ -315,7 +315,8 @@ result = await ro.once(Key("order-A-1001", "refund", {"order": "A-1001", "cents"
 ```
 
 The API mirrors the TypeScript one in snake_case (`ro.begin(scope, run_id=..., context_at=...)`,
-`run.once(intent, payload, effect)`). Keys hash identically, and the Postgres table and
+`run.once(intent, payload, effect)`). Keys hash identically (except some non-integer floats;
+see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)), and the Postgres table and
 Redis layout are the same. See [python/README.md](python/README.md).
 
 ## Prior art

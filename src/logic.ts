@@ -23,9 +23,9 @@ export interface Policy {
 
 export type ConflictMode = 'any' | 'same-intent' | 'none';
 
-export const SUMMARY_MAX = 2000;
+const SUMMARY_MAX = 2000;
 
-export function emptyState(): ScopeState {
+function emptyState(): ScopeState {
   return { v: 1, seq: 0, tokenSeq: 0, runs: {}, effects: {} };
 }
 
@@ -50,7 +50,7 @@ function tick(s: ScopeState): number {
   return s.seq;
 }
 
-export function isAbandoned(e: EffectRecord, now: number, policy: Policy): boolean {
+function isAbandoned(e: EffectRecord, now: number, policy: Policy): boolean {
   return e.status === 'pending' && now - e.claimedAt >= policy.pendingTtlMs;
 }
 
@@ -82,7 +82,7 @@ function isNewer(a: RunRecord, b: RunRecord): boolean {
  * A newer run owns the scope if it is live, or if it already wrote (it may have answered).
  * A newer run that ended without writing, or was cancelled, does not.
  */
-export function supersedingRun(s: ScopeState, run: RunRecord, now: number): RunRecord | null {
+function supersedingRun(s: ScopeState, run: RunRecord, now: number): RunRecord | null {
   let best: RunRecord | null = null;
   for (const r of Object.values(s.runs)) {
     if (r.runId === run.runId || r.endReason === 'cancelled' || !isNewer(r, run)) continue;
@@ -254,7 +254,7 @@ export type ClaimOutcome =
   | { kind: 'refused'; reason: RefusalReason; conflicts?: ConflictInfo[]; entry?: EffectRecord };
 
 /** Writes by others on the scope that `run` has not seen yet, or that may still land. */
-export function conflictsFor(
+function conflictsFor(
   s: ScopeState,
   run: RunRecord,
   key: string,

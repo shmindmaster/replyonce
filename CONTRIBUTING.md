@@ -5,37 +5,22 @@ a duplicate effect from reaching a customer, or makes an honest limit clearer.
 
 ## Setup
 
+Git and Docker are enough. Do not install Node or Python on the host, and do not create
+`node_modules`, `dist` or `python/.venv` in the checkout.
+
 ```sh
 git clone https://github.com/shmindmaster/replyonce
 cd replyonce
-npm install
-npm run typecheck && npm run build && npm test
+docker compose run --build --rm test      # Vitest against memory, Postgres and Redis
+docker compose run --rm typecheck         # tsc --noEmit
+docker compose run --build --rm python    # pytest against memory, Postgres and Redis
+docker compose down                       # stop Postgres and Redis
 ```
 
-Node 22 or newer is needed to develop (the build tools require it). The published package
-supports Node 18+, and CI checks the built output on 18 and 20.
-
-### Postgres and Redis tests
-
-The suites run against every store whose URL is set:
-
-```sh
-docker run -d --rm --name ro-pg -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:17-alpine
-docker run -d --rm --name ro-redis -p 56379:6379 redis:7-alpine
-REPLYONCE_PG_URL=postgres://postgres:postgres@localhost:55432/postgres \
-REPLYONCE_REDIS_URL=redis://localhost:56379 npm test
-```
-
-Without those variables, only the memory store is tested. CI always runs all three.
-
-### Python
-
-```sh
-cd python
-uv sync
-uv run pytest -q          # same REPLYONCE_PG_URL / REPLYONCE_REDIS_URL variables
-uv run replyonce demo
-```
+Compose starts Postgres 16 and Redis 7 and sets `REPLYONCE_PG_URL` and `REPLYONCE_REDIS_URL`
+for the suites. The images use Node 22 and Python 3.12. The published npm package supports
+Node 18+ and the Python package 3.10+. [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) and
+[docs/TESTING.md](docs/TESTING.md) have the details, including the checks CI does not run.
 
 `python/src/replyonce/_logic.py` is a line-for-line port of `src/logic.ts`. A change to one
 needs the same change, and a test, in the other. `scripts/interop.ts` and
@@ -58,8 +43,8 @@ needs the same change, and a test, in the other. `scripts/interop.ts` and
 ## Pull requests
 
 1. Open an issue first for anything larger than a fix.
-2. Keep commits focused. CI must be green: typecheck, build, tests on three stores, the chaos
-   demo, the examples, and smoke tests on Node 18 and 20.
+2. Keep commits focused. CI must be green: the Node suite and typecheck, and the Python suite,
+   each against all three stores, with the chaos demo in both suites.
 3. Add a line to `CHANGELOG.md` under "Unreleased".
 
 By contributing, you agree that your contributions are licensed under the Apache License 2.0.

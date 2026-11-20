@@ -12,8 +12,10 @@ redelivered webhooks, queue jobs, or overlapping runs hit the same customer.
 The demo simulates 100 support conversations under injected faults
 (worker crash, duplicate delivery, customer burst, timeout before send,
 timeout after send). With replyonce, no customer message is answered twice.
-The seed is 7. `--seed N` picks another run. `--conversations 300` is the
-CI stress count for the Node demo.
+The demo runs on simulated time, so a seed always gives the same counts. The
+default seed is 7, and `--seed N` picks another run. The Node suite runs the
+demo against memory, Postgres, and Redis, the Python suite runs it in memory,
+and both fail on a single duplicate.
 
 Zero runtime dependencies on Node. Optional stores are Postgres and Redis.
 The Python package mirrors the API and has optional `postgres` and `redis`

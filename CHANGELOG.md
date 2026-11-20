@@ -5,6 +5,8 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+- Docs: `docs/` and `CONTRIBUTING.md` match the current Docker CI, export map, refusal reasons,
+  store layout and release workflows, with runtime and release diagrams.
 - Internal helpers in `src/key.ts`, `src/logic.ts` and `src/demo.ts` are no longer exported from
   their modules. None was part of the package's public entry points; no API change.
 

@@ -44,7 +44,8 @@ replyonce demo: 100 simulated support conversations under injected faults
 ```
 
 The demo runs on simulated time, so a seed always gives the same counts: `--seed N` (default 7)
-picks another run. CI runs it on every push and fails if a single duplicate gets through.
+picks another run. The Node suite runs it against all three stores on every push, and the Python suite
+in memory; both fail if a single duplicate gets through.
 Set `FORCE_COLOR=1` to keep its colour when the output is piped or recorded.
 
 ## 30-second quickstart
@@ -176,6 +177,7 @@ createReplyOnce(options): ReplyOnce
 | `classifyError` | see below | `(err) => 'not_applied' \| 'ambiguous'` |
 | `reconcile` | none | `async (entry) => ({ outcome: 'committed' \| 'not_applied' \| 'unknown' })` |
 | `onEvent` | none | Observer for `claimed`, `committed`, `replayed`, `refused`, `ambiguous` and other events (logs, metrics, OpenTelemetry) |
+| `clock` / `sleep` | `Date.now` / `setTimeout` | Time source and wait function, for tests or simulated time |
 
 By default only `NotApplied` (or any error with `replyonce: 'not_applied'`) counts as
 "did not happen". Every other error is `ambiguous`, because a timeout or reset says
@@ -269,7 +271,7 @@ With a shared store and every side effect going through replyonce:
 
 These properties are exercised by race tests (parallel workers, redelivery storms with
 crashing workers, concurrent runs on one conversation) and by the chaos demo, against all
-three stores, in CI.
+three stores, in CI. [docs/TESTING.md](docs/TESTING.md) lists what CI covers.
 
 ## Limits
 
@@ -313,7 +315,8 @@ result = await ro.once(Key("order-A-1001", "refund", {"order": "A-1001", "cents"
 ```
 
 The API mirrors the TypeScript one in snake_case (`ro.begin(scope, run_id=..., context_at=...)`,
-`run.once(intent, payload, effect)`). Keys hash identically, and the Postgres table and
+`run.once(intent, payload, effect)`). Keys hash identically (except some non-integer floats;
+see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)), and the Postgres table and
 Redis layout are the same. See [python/README.md](python/README.md).
 
 ## Prior art

@@ -1,8 +1,10 @@
 # Security
 
-The library holds idempotency state, not customer content, unless a caller
-puts that content in the payload it asks the store to remember. Keep payloads
-to the identity the effect needs (order id, message id, amount).
+The ledger stores what callers give it: `summary` text, effect results, and
+error messages. Payloads are hashed into the key and are not stored. Keep
+summaries and results to what replay needs, and leave secrets and payment
+details out. The root [SECURITY.md](../SECURITY.md) has the reporting policy
+and the ledger data guidance.
 
 - Store URLs and passwords stay in the environment. The compose file uses
   the local development password `postgres` for the throwaway database only.

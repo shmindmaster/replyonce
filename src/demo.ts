@@ -24,7 +24,7 @@ export interface DemoOptions {
   realTime?: boolean;
 }
 
-export interface DemoStats {
+interface DemoStats {
   conversations: number;
   customerMessages: number;
   repliesSent: number;

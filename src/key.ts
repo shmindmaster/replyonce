@@ -32,7 +32,7 @@ function normalize(value: unknown, seen: Set<unknown>): unknown {
   return out;
 }
 
-export function sha256Hex(input: string): string {
+function sha256Hex(input: string): string {
   return createHash('sha256').update(input).digest('hex');
 }
 

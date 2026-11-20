@@ -5,7 +5,7 @@ import type { Store } from '../src/index.js';
 import { PostgresStore } from '../src/stores/postgres.js';
 import { RedisStore } from '../src/stores/redis.js';
 
-export interface StoreCase {
+interface StoreCase {
   name: string;
   make: () => Promise<Store>;
 }

@@ -5,6 +5,9 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+- Docs: `docs/` and `CONTRIBUTING.md` match the current Docker CI, export map, refusal reasons,
+  store layout and release workflows, with runtime and release diagrams.
+
 ## 0.1.3 - 2026-10-25
 
 Python package only.

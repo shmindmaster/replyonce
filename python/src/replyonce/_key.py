@@ -14,6 +14,15 @@ MISSING: Any = object()
 """Sentinel for "no payload" (distinct from a ``None`` payload, which hashes as JSON null)."""
 
 
+class _RawNumber:
+    """A number whose ECMAScript text form must be emitted without JSON quoting."""
+
+    __slots__ = ("text",)
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
 def _sort_key(k: str) -> bytes:
     # JavaScript sorts object keys by UTF-16 code units.
     return k.encode("utf-16-be")
@@ -26,6 +35,45 @@ def _iso(value: _dt.datetime) -> str:
     return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
 
 
+def _js_number(value: float) -> str:
+    """Render a float the way ECMAScript Number::toString does.
+
+    Python's repr uses different thresholds and pads exponents (``1e-07``,
+    ``1e-06``), while JSON.stringify emits ``1e-7``, ``0.000001`` and switches
+    to exponent notation only at 1e21. Keys must be byte-identical across the
+    Python and TypeScript packages or the two runtimes cannot share a ledger.
+    """
+    if value == 0:
+        return "0"  # includes -0.0, which JSON.stringify renders as 0
+    negative = value < 0
+    text = repr(abs(value))  # shortest round-trip digits
+    if "e" in text:
+        mantissa, exponent_text = text.split("e")
+        exponent = int(exponent_text)
+    else:
+        mantissa, exponent = text, 0
+    integer_part, _, fraction_part = mantissa.partition(".")
+    digits = integer_part + fraction_part
+    point = len(integer_part) + exponent
+    leading = len(digits) - len(digits.lstrip("0"))
+    digits = digits.lstrip("0")
+    point -= leading
+    digits = digits.rstrip("0") or "0"
+    k = len(digits)
+    n = point
+    if k <= n <= 21:
+        body = digits + "0" * (n - k)
+    elif 0 < n <= 21:
+        body = digits[:n] + "." + digits[n:]
+    elif -6 < n <= 0:
+        body = "0." + "0" * (-n) + digits
+    else:
+        exp = n - 1
+        sign = "+" if exp >= 0 else "-"
+        body = digits[0] + ("." + digits[1:] if k > 1 else "") + "e" + sign + str(abs(exp))
+    return "-" + body if negative else body
+
+
 def _normalize(value: Any, seen: set[int]) -> Any:
     if value is None or isinstance(value, (bool, str)):
         return value
@@ -36,7 +84,12 @@ def _normalize(value: Any, seen: set[int]) -> Any:
             return "NaN"
         if math.isinf(value):
             return "Infinity" if value > 0 else "-Infinity"
-        return int(value) if value.is_integer() else value
+        # JS keeps integers in decimal notation below 1e21 and switches to
+        # exponent notation at 1e21; converting every integral float to int
+        # used to turn 1e21 into a 22-digit integer.
+        if value.is_integer() and abs(value) < 1e21:
+            return int(value)
+        return _RawNumber(_js_number(value))
     if isinstance(value, _dt.datetime):
         return _iso(value)
     if isinstance(value, _dt.date):
@@ -61,9 +114,31 @@ def _normalize(value: Any, seen: set[int]) -> Any:
     raise TypeError(f"replyonce: cannot hash a payload of type {type(value).__name__}")
 
 
+def _encode(value: Any) -> str:
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, _RawNumber):
+        return value.text
+    if isinstance(value, list):
+        return "[" + ",".join(_encode(item) for item in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ",".join(
+            json.dumps(k, ensure_ascii=False) + ":" + _encode(v) for k, v in value.items()
+        ) + "}"
+    raise TypeError(f"replyonce: cannot hash a payload of type {type(value).__name__}")
+
+
 def canonical_json(value: Any) -> str:
     """Deterministic JSON: keys sorted, no whitespace. Matches the TypeScript ``canonicalJson``."""
-    return json.dumps(_normalize(value, set()), separators=(",", ":"), ensure_ascii=False, sort_keys=False)
+    return _encode(_normalize(value, set()))
 
 
 def sha256_hex(text: str) -> str:

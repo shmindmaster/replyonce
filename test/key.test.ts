@@ -19,6 +19,22 @@ describe('keys', () => {
     );
   });
 
+  it('uses ECMAScript number formatting shared with the Python package', () => {
+    // These exact strings are frozen as cross-language vectors in
+    // python/tests/test_key.py. Changing them is a ledger-compatibility break.
+    expect(canonicalJson({ n: 1e-7 })).toBe('{"n":1e-7}');
+    expect(canonicalJson({ n: 1.5e-7 })).toBe('{"n":1.5e-7}');
+    expect(canonicalJson({ n: 1e-6 })).toBe('{"n":0.000001}');
+    expect(canonicalJson({ n: 1e-5 })).toBe('{"n":0.00001}');
+    expect(canonicalJson({ n: 1e20 })).toBe('{"n":100000000000000000000}');
+    expect(canonicalJson({ n: 1e21 })).toBe('{"n":1e+21}');
+    expect(canonicalJson({ n: -1e21 })).toBe('{"n":-1e+21}');
+    expect(canonicalJson({ n: 1.2345678901234567e-8 })).toBe('{"n":1.2345678901234567e-8}');
+    expect(canonicalJson({ n: 2 ** 60 })).toBe('{"n":1152921504606847000}');
+    expect(canonicalJson({ n: 1000000000000000100 })).toBe('{"n":1000000000000000100}');
+    expect(canonicalJson({ n: 1e21 })).toBe('{"n":1e+21}');
+  });
+
   it('rejects circular payloads', () => {
     const a: Record<string, unknown> = {};
     a.self = a;

@@ -30,6 +30,9 @@ describe('keys', () => {
     expect(canonicalJson({ n: 1e21 })).toBe('{"n":1e+21}');
     expect(canonicalJson({ n: -1e21 })).toBe('{"n":-1e+21}');
     expect(canonicalJson({ n: 1.2345678901234567e-8 })).toBe('{"n":1.2345678901234567e-8}');
+    expect(canonicalJson({ n: 2 ** 60 })).toBe('{"n":1152921504606847000}');
+    expect(canonicalJson({ n: 1000000000000000100 })).toBe('{"n":1000000000000000100}');
+    expect(canonicalJson({ n: 1e21 })).toBe('{"n":1e+21}');
   });
 
   it('rejects circular payloads', () => {

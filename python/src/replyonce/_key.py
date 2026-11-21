@@ -78,17 +78,20 @@ def _normalize(value: Any, seen: set[int]) -> Any:
     if value is None or isinstance(value, (bool, str)):
         return value
     if isinstance(value, int):
-        return value
+        # JSON.parse in JS produces a double for every number token; Python
+        # keeps an int. Above 2**53 the two runtimes must agree on the JS
+        # shortest round-trip form or one payload gets two ledger keys.
+        if isinstance(value, bool) or abs(value) <= 2**53:
+            return value
+        return _RawNumber(_js_number(float(value)))
     if isinstance(value, float):
         if math.isnan(value):
             return "NaN"
         if math.isinf(value):
             return "Infinity" if value > 0 else "-Infinity"
-        # JS keeps integers in decimal notation below 1e21 and switches to
-        # exponent notation at 1e21; converting every integral float to int
-        # used to turn 1e21 into a 22-digit integer.
-        if value.is_integer() and abs(value) < 1e21:
-            return int(value)
+        # Even integral doubles must use the JS shortest round-trip form:
+        # int(2**60) is 1152921504606846976 in Python but JSON.stringify
+        # emits 1152921504606847000. _js_number handles both forms.
         return _RawNumber(_js_number(value))
     if isinstance(value, _dt.datetime):
         return _iso(value)
@@ -124,7 +127,7 @@ def _encode(value: Any) -> str:
     if isinstance(value, str):
         return json.dumps(value, ensure_ascii=False)
     if isinstance(value, int):
-        return str(value)
+        return int.__repr__(value)  # IntEnum str() is "Class.MEMBER" on Python 3.10
     if isinstance(value, _RawNumber):
         return value.text
     if isinstance(value, list):

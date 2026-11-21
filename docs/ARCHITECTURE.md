@@ -58,7 +58,10 @@ or a person resolves it. The README has the claim order and the effect state
 diagram.
 
 Node and Python persist the same state format and hash keys identically, so
-they can share one Postgres table or Redis prefix. One exception: a
-non-integer float that Python prints in exponent form (below `1e-4` or from
-`1e16`) hashes differently from Node, so keep such numbers out of payloads,
-or pass them as strings, when both languages write one scope.
+they can share one Postgres table or Redis prefix. Numbers follow ECMAScript
+`Number::toString`: shortest round-trip digits, decimal notation down to
+`1e-6` (inclusive) and below `1e21`, exponent notation outside that range,
+with no zero-padded exponent (`1e-7`, not `1e-07`). Python renders floats with
+those same rules and normalises integers above 2**53 through a double, so a
+JSON number token produces one ledger key in both languages. Cross-language
+vectors are frozen in `python/tests/test_key.py` and `test/key.test.ts`.

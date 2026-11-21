@@ -5,6 +5,10 @@ All notable changes to this project are documented here. This project follows
 
 ## Unreleased
 
+- Python canonical keys now match ECMAScript `Number::toString` for every finite JSON number,
+  including exponent-format and large values. Previously Python emitted `1e-07` where Node emits
+  `1e-7`, and integral doubles above 2**53 used the exact binary integer instead of the shortest
+  round-trip decimal, so the two packages derived different ledger keys from the same payload.
 - Docs: `docs/` and `CONTRIBUTING.md` match the current Docker CI, export map, refusal reasons,
   store layout and release workflows, with runtime and release diagrams.
 - Internal helpers in `src/key.ts`, `src/logic.ts` and `src/demo.ts` are no longer exported from
